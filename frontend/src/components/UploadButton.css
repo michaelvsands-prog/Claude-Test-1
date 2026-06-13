@@ -1,0 +1,17 @@
+.upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.upload-btn:active { opacity: 0.8; }
+.upload-btn:disabled { opacity: 0.6; }
+.upload-btn--done { background: #2e7d32; color: #fff; }
+.upload-btn--error { background: #b71c1c; color: #fff; }
