@@ -1,7 +1,11 @@
 const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const TOKEN = process.env.REACT_APP_API_TOKEN || '';
+
+// Auth header included on every request when a token is configured.
+const authHeaders = () => (TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {});
 
 export async function fetchTracks() {
-  const res = await fetch(`${BASE}/api/tracks`);
+  const res = await fetch(`${BASE}/api/tracks`, { headers: authHeaders() });
   return res.json();
 }
 
@@ -13,6 +17,7 @@ export async function uploadVideo(file, onProgress) {
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${BASE}/api/tracks/upload`);
+    if (TOKEN) xhr.setRequestHeader('Authorization', `Bearer ${TOKEN}`);
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
@@ -34,7 +39,7 @@ export async function uploadVideo(file, onProgress) {
 export async function createClip(trackId, { title, startSec, endSec }) {
   const res = await fetch(`${BASE}/api/tracks/${trackId}/clip`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ title, startSec, endSec }),
   });
   if (!res.ok) throw new Error((await res.json()).error);
@@ -44,12 +49,12 @@ export async function createClip(trackId, { title, startSec, endSec }) {
 export async function renameTrack(id, title) {
   const res = await fetch(`${BASE}/api/tracks/${id}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ title }),
   });
   return res.json();
 }
 
 export async function deleteTrack(id) {
-  await fetch(`${BASE}/api/tracks/${id}`, { method: 'DELETE' });
+  await fetch(`${BASE}/api/tracks/${id}`, { method: 'DELETE', headers: authHeaders() });
 }

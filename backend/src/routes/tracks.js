@@ -4,9 +4,13 @@ const { v4: uuidv4 } = require('uuid');
 const { extractAudio, getDuration } = require('../lib/ffmpeg');
 const { uploadFile, deleteFile } = require('../lib/r2');
 const db = require('../lib/db');
+const requireToken = require('../lib/auth');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } }); // 500MB
+
+// All track routes require the bearer token (when ALLOWED_TOKEN is set).
+router.use(requireToken);
 
 // GET /api/tracks — list all tracks
 router.get('/', (req, res) => {
