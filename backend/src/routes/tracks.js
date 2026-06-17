@@ -34,6 +34,7 @@ router.post('/upload', upload.single('video'), async (req, res) => {
     const track = db.insert({
       id,
       title,
+      folder: req.body.folder || 'Uncategorized',
       duration: Math.round(duration),
       url,
       r2Key: key,
@@ -49,10 +50,10 @@ router.post('/upload', upload.single('video'), async (req, res) => {
 });
 
 // POST /api/tracks/import-url — download audio from a YouTube/SoundCloud link
-// Body: { url, title? }
+// Body: { url, title?, folder? }
 router.post('/import-url', async (req, res) => {
   try {
-    const { url, title: titleOverride } = req.body;
+    const { url, title: titleOverride, folder } = req.body;
     if (!url) return res.status(400).json({ error: 'url is required' });
 
     const { buffer, title, duration } = await downloadAudioFromUrl(url);
@@ -64,6 +65,7 @@ router.post('/import-url', async (req, res) => {
     const track = db.insert({
       id,
       title: titleOverride || title,
+      folder: folder || 'Uncategorized',
       duration,
       url: fileUrl,
       r2Key: key,
@@ -107,6 +109,7 @@ router.post('/:id/clip', async (req, res) => {
     const track = db.insert({
       id,
       title: title || `${parent.title} [${startSec}s–${endSec}s]`,
+      folder: parent.folder || 'Uncategorized',
       duration: Math.round(endSec - startSec),
       url,
       r2Key: key,
@@ -122,9 +125,12 @@ router.post('/:id/clip', async (req, res) => {
   }
 });
 
-// PATCH /api/tracks/:id — rename a track
+// PATCH /api/tracks/:id — rename a track and/or move it to a folder
 router.patch('/:id', (req, res) => {
-  const track = db.update(req.params.id, { title: req.body.title });
+  const patch = {};
+  if (req.body.title != null) patch.title = req.body.title;
+  if (req.body.folder != null) patch.folder = req.body.folder;
+  const track = db.update(req.params.id, patch);
   if (!track) return res.status(404).json({ error: 'Not found' });
   res.json(track);
 });

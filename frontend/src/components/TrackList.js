@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Pause, Trash2, Scissors, Pencil, Check, X } from 'lucide-react';
+import { Play, Pause, Trash2, Scissors, Pencil, Check, X, FolderInput } from 'lucide-react';
 import './TrackList.css';
 
 function formatTime(secs) {
@@ -9,8 +9,9 @@ function formatTime(secs) {
   return `${m}:${s}`;
 }
 
-function TrackRow({ track, isCurrent, playing, onPlay, onDelete, onRename, onClip }) {
+function TrackRow({ track, isCurrent, playing, onPlay, onDelete, onRename, onClip, onMove }) {
   const [editing, setEditing] = useState(false);
+  const [movingTo, setMovingTo] = useState(null);
   const [title, setTitle] = useState(track.title);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -23,6 +24,11 @@ function TrackRow({ track, isCurrent, playing, onPlay, onDelete, onRename, onCli
   const cancelRename = () => {
     setTitle(track.title);
     setEditing(false);
+  };
+
+  const saveMove = () => {
+    if (movingTo !== null && movingTo.trim()) onMove(track.id, movingTo.trim());
+    setMovingTo(null);
   };
 
   return (
@@ -41,10 +47,22 @@ function TrackRow({ track, isCurrent, playing, onPlay, onDelete, onRename, onCli
             autoFocus
             onClick={e => e.stopPropagation()}
           />
+        ) : movingTo !== null ? (
+          <input
+            className="track-rename-input"
+            value={movingTo}
+            onChange={e => setMovingTo(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveMove(); if (e.key === 'Escape') setMovingTo(null); }}
+            placeholder="Folder name"
+            autoFocus
+            onClick={e => e.stopPropagation()}
+          />
         ) : (
-          <span className="track-title">{track.title}</span>
+          <>
+            <span className="track-title">{track.title}</span>
+            <span className="track-duration">{formatTime(track.duration)} · {track.folder || 'Uncategorized'}</span>
+          </>
         )}
-        <span className="track-duration">{formatTime(track.duration)}</span>
       </div>
 
       {editing ? (
@@ -52,8 +70,16 @@ function TrackRow({ track, isCurrent, playing, onPlay, onDelete, onRename, onCli
           <button onClick={saveRename}><Check size={16} /></button>
           <button onClick={cancelRename}><X size={16} /></button>
         </div>
+      ) : movingTo !== null ? (
+        <div className="track-actions">
+          <button onClick={saveMove}><Check size={16} /></button>
+          <button onClick={() => setMovingTo(null)}><X size={16} /></button>
+        </div>
       ) : (
         <div className="track-actions">
+          <button onClick={() => { setMovingTo(track.folder || ''); setMenuOpen(false); }} title="Move to folder">
+            <FolderInput size={16} />
+          </button>
           <button onClick={() => { setEditing(true); setMenuOpen(false); }} title="Rename">
             <Pencil size={16} />
           </button>
@@ -69,7 +95,7 @@ function TrackRow({ track, isCurrent, playing, onPlay, onDelete, onRename, onCli
   );
 }
 
-export default function TrackList({ tracks, currentId, playing, onPlay, onDelete, onRename, onClip }) {
+export default function TrackList({ tracks, currentId, playing, onPlay, onDelete, onRename, onClip, onMove }) {
   return (
     <div className="track-list">
       {tracks.map(track => (
@@ -82,6 +108,7 @@ export default function TrackList({ tracks, currentId, playing, onPlay, onDelete
           onDelete={onDelete}
           onRename={onRename}
           onClip={onClip}
+          onMove={onMove}
         />
       ))}
     </div>

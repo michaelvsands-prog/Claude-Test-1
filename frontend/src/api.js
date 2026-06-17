@@ -65,6 +65,15 @@ export async function renameTrack(id, title) {
   return res.json();
 }
 
+export async function moveTrack(id, folder) {
+  const res = await fetch(`${BASE}/api/tracks/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ folder }),
+  });
+  return res.json();
+}
+
 export async function deleteTrack(id) {
   await fetch(`${BASE}/api/tracks/${id}`, { method: 'DELETE', headers: authHeaders() });
 }
