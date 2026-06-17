@@ -59,6 +59,7 @@ After deploying, set `REACT_APP_API_URL` to your backend URL in the frontend dep
 ## Features
 
 - Upload any video (screen recordings, saved YouTube clips, camera recordings)
+- Paste a YouTube or SoundCloud link to import its audio directly (via yt-dlp)
 - Audio is extracted server-side via ffmpeg → stored as MP3 in Cloudflare R2
 - Spotify-style playlist with play/pause/skip/seek
 - Rename any track
@@ -66,3 +67,22 @@ After deploying, set `REACT_APP_API_URL` to your backend URL in the frontend dep
 - Auto-advances to the next track
 - Background audio playback on iPhone
 - Installable as a home screen app (PWA)
+
+## Importing from YouTube / SoundCloud
+
+The backend uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) (via the `yt-dlp-exec` npm package) to download
+just the audio from a link. This needs **Python 3** installed on whatever machine/server runs the backend
+(the Docker image already includes it). For local development:
+
+```bash
+# macOS
+brew install python3
+
+# Debian/Ubuntu
+sudo apt-get install python3
+```
+
+Then tap the **Link** button in the app and paste a YouTube or SoundCloud URL.
+
+Only import content you have the right to use — downloading from YouTube/SoundCloud may violate their
+Terms of Service depending on how the content is used, so keep this to personal use.

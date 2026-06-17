@@ -3,6 +3,7 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { extractAudio, getDuration } = require('../lib/ffmpeg');
 const { uploadFile, deleteFile } = require('../lib/r2');
+const { downloadAudioFromUrl } = require('../lib/ytdlp');
 const db = require('../lib/db');
 const requireToken = require('../lib/auth');
 
@@ -44,6 +45,37 @@ router.post('/upload', upload.single('video'), async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tracks/import-url — download audio from a YouTube/SoundCloud link
+// Body: { url, title? }
+router.post('/import-url', async (req, res) => {
+  try {
+    const { url, title: titleOverride } = req.body;
+    if (!url) return res.status(400).json({ error: 'url is required' });
+
+    const { buffer, title, duration } = await downloadAudioFromUrl(url);
+
+    const id = uuidv4();
+    const key = `tracks/${id}.mp3`;
+    const fileUrl = await uploadFile(key, buffer, 'audio/mpeg');
+
+    const track = db.insert({
+      id,
+      title: titleOverride || title,
+      duration,
+      url: fileUrl,
+      r2Key: key,
+      sourceUrl: url,
+      createdAt: new Date().toISOString(),
+      clips: [],
+    });
+
+    res.json(track);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Import failed' });
   }
 });
 

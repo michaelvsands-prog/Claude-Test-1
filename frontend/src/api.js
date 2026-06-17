@@ -36,6 +36,16 @@ export async function uploadVideo(file, onProgress) {
   });
 }
 
+export async function importFromUrl(url) {
+  const res = await fetch(`${BASE}/api/tracks/import-url`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error || 'Import failed');
+  return res.json();
+}
+
 export async function createClip(trackId, { title, startSec, endSec }) {
   const res = await fetch(`${BASE}/api/tracks/${trackId}/clip`, {
     method: 'POST',

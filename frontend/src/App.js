@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchTracks, uploadVideo, deleteTrack, renameTrack, createClip } from './api';
+import { fetchTracks, uploadVideo, deleteTrack, renameTrack, createClip, importFromUrl } from './api';
 import { usePlayer } from './usePlayer';
 import TrackList from './components/TrackList';
 import Player from './components/Player';
 import UploadButton from './components/UploadButton';
+import ImportUrlButton from './components/ImportUrlButton';
 import ClipModal from './components/ClipModal';
 import './App.css';
 
@@ -28,6 +29,11 @@ export default function App() {
     setTracks(prev => [...prev, track]);
   };
 
+  const handleImport = async (url) => {
+    const track = await importFromUrl(url);
+    setTracks(prev => [...prev, track]);
+  };
+
   const handleDelete = async (id) => {
     await deleteTrack(id);
     setTracks(prev => prev.filter(t => t.id !== id));
@@ -48,7 +54,10 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <h1 className="app-title">AudioClip</h1>
-        <UploadButton onUpload={handleUpload} />
+        <div className="app-header-actions">
+          <ImportUrlButton onImport={handleImport} />
+          <UploadButton onUpload={handleUpload} />
+        </div>
       </header>
 
       <main className="app-main">
