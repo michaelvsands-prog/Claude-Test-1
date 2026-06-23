@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { extractAudio, getDuration } = require('../lib/ffmpeg');
-const { uploadFile, deleteFile } = require('../lib/r2');
+const { uploadFile, deleteFile, listFiles } = require('../lib/r2');
 const { downloadAudioFromUrl } = require('../lib/ytdlp');
 const db = require('../lib/db');
 const requireToken = require('../lib/auth');
@@ -78,6 +78,48 @@ router.post('/import-url', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || 'Import failed' });
+  }
+});
+
+// POST /api/tracks/recover-from-storage — re-list any mp3 files sitting in R2 that
+// aren't currently tracked (e.g. after the local track list was wiped) and add them back.
+router.post('/recover-from-storage', async (req, res) => {
+  try {
+    const keys = await listFiles('tracks/');
+    const existingKeys = new Set(db.all().map(t => t.r2Key));
+    const recovered = [];
+
+    for (const key of keys) {
+      if (existingKeys.has(key) || !key.endsWith('.mp3')) continue;
+
+      const id = key.replace(/^tracks\//, '').replace(/\.mp3$/, '');
+      const url = `${process.env.R2_PUBLIC_URL}/${key}`;
+
+      let duration = 0;
+      try {
+        const fetch = (await import('node-fetch')).default;
+        const audioRes = await fetch(url);
+        const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+        duration = await getDuration(audioBuffer);
+      } catch (_) {}
+
+      const track = db.insert({
+        id,
+        title: `Recovered track ${id.slice(0, 8)}`,
+        folder: 'Recovered',
+        duration: Math.round(duration),
+        url,
+        r2Key: key,
+        createdAt: new Date().toISOString(),
+        clips: [],
+      });
+      recovered.push(track);
+    }
+
+    res.json({ recovered: recovered.length, tracks: recovered });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Recovery failed' });
   }
 });
 

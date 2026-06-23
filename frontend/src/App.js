@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchTracks, uploadVideo, deleteTrack, renameTrack, moveTrack, createClip, importFromUrl } from './api';
+import { fetchTracks, uploadVideo, deleteTrack, renameTrack, moveTrack, createClip, importFromUrl, recoverFromStorage } from './api';
 import { usePlayer } from './usePlayer';
 import TrackList from './components/TrackList';
 import Player from './components/Player';
@@ -57,6 +57,16 @@ export default function App() {
     setClipTarget(null);
   };
 
+  const handleRecover = async () => {
+    const result = await recoverFromStorage();
+    if (result.recovered > 0) {
+      setTracks(prev => [...prev, ...result.tracks]);
+      alert(`Recovered ${result.recovered} track(s) from storage.`);
+    } else {
+      alert('No missing tracks found in storage.');
+    }
+  };
+
   return (
     <div className="app">
       <header className="app-header">
@@ -64,6 +74,9 @@ export default function App() {
         <div className="app-header-actions">
           <ImportUrlButton onImport={handleImport} />
           <UploadButton onUpload={handleUpload} />
+          <button className="recover-btn" onClick={handleRecover} title="Recover tracks from storage">
+            Recover
+          </button>
         </div>
       </header>
 

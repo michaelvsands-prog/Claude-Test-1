@@ -22,6 +22,16 @@
   gap: 8px;
 }
 
+.recover-btn {
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 16px;
+  white-space: nowrap;
+}
+
 .app-title {
   font-size: 22px;
   font-weight: 700;

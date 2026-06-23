@@ -74,6 +74,15 @@ export async function moveTrack(id, folder) {
   return res.json();
 }
 
+export async function recoverFromStorage() {
+  const res = await fetch(`${BASE}/api/tracks/recover-from-storage`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error((await res.json()).error || 'Recovery failed');
+  return res.json();
+}
+
 export async function deleteTrack(id) {
   await fetch(`${BASE}/api/tracks/${id}`, { method: 'DELETE', headers: authHeaders() });
 }

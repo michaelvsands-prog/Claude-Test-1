@@ -31,4 +31,19 @@ async function getPresignedUrl(key, expiresIn = 3600) {
   return getSignedUrl(client, command, { expiresIn });
 }
 
-module.exports = { uploadFile, deleteFile, getPresignedUrl };
+async function listFiles(prefix = '') {
+  const keys = [];
+  let continuationToken;
+  do {
+    const res = await client.send(new ListObjectsV2Command({
+      Bucket: BUCKET,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    }));
+    (res.Contents || []).forEach(obj => keys.push(obj.Key));
+    continuationToken = res.NextContinuationToken;
+  } while (continuationToken);
+  return keys;
+}
+
+module.exports = { uploadFile, deleteFile, getPresignedUrl, listFiles };
