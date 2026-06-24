@@ -313,7 +313,8 @@ else:
     })
     st.info("Using sample data until you generate a list or upload a CSV.")
 
-st.dataframe(input_df, use_container_width=True)
+st.caption("Click a cell to edit it, use the + row at the bottom to add a company, or the trash icon to delete a row.")
+input_df = st.data_editor(input_df, num_rows="dynamic", use_container_width=True)
 
 cols = list(input_df.columns)
 company_col = st.selectbox("Company column", cols, index=cols.index("Company") if "Company" in cols else 0)
