@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -8,6 +9,8 @@ import streamlit as st
 
 APOLLO_SEARCH_URL = "https://api.apollo.io/api/v1/mixed_people/api_search"
 APOLLO_ENRICH_URL = "https://api.apollo.io/api/v1/people/match"
+ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
 DEFAULT_TITLES = [
     "Head of Investment Operations",
@@ -29,12 +32,57 @@ def get_api_key() -> Optional[str]:
     return st.session_state.get("apollo_api_key") or os.getenv("APOLLO_API_KEY")
 
 
+def get_anthropic_api_key() -> Optional[str]:
+    return st.session_state.get("anthropic_api_key") or os.getenv("ANTHROPIC_API_KEY")
+
+
+def generate_companies_with_llm(api_key: str, instruction: str) -> pd.DataFrame:
+    prompt = (
+        "List real, currently operating companies matching this request: "
+        f"\"{instruction}\".\n"
+        "Respond with ONLY a CSV table, no commentary, no markdown fences. "
+        "Header row exactly: Company,Domain\n"
+        "Use each company's real primary corporate domain (e.g. blackrock.com). "
+        "If you are not confident a company or its domain is real, omit it rather than guessing."
+    )
+    resp = requests.post(
+        ANTHROPIC_MESSAGES_URL,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": ANTHROPIC_MODEL,
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=60,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    text = "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
+    text = text.strip().strip("`")
+    if text.lower().startswith("csv"):
+        text = text[3:].strip()
+
+    from io import StringIO
+
+    df = pd.read_csv(StringIO(text))
+    df.columns = [c.strip() for c in df.columns]
+    return df
+
+
 def normalize_domain(value: Any) -> str:
     if pd.isna(value):
         return ""
     text = str(value).strip().lower()
     text = text.replace("https://", "").replace("http://", "").replace("www.", "")
     return text.split("/")[0]
+
+
+def is_valid_domain(domain: str) -> bool:
+    return bool(re.match(r"^[a-z0-9-]+(\.[a-z0-9-]+)+$", domain))
 
 
 def score_person(person: Dict[str, Any]) -> Tuple[int, str]:
@@ -183,6 +231,12 @@ def process_companies(df: pd.DataFrame, company_col: str, domain_col: str, title
     for i, (_, record) in enumerate(clean_df.iterrows(), start=1):
         company = str(record[company_col]).strip()
         domain = str(record[domain_col]).strip()
+
+        if not is_valid_domain(domain):
+            rows.append({"Company": company, "Domain": domain, "Person": "", "Title": "", "LinkedIn": "", "Email": "", "Email Status": "", "Apollo Person ID": "", "Organization": company, "Confidence Score": 0, "Confidence Notes": f"Skipped: '{domain}' is not a valid domain (expected e.g. 'example.com')"})
+            progress.progress(i / total if total else 1.0)
+            continue
+
         status.write(f"Searching {company} ({domain})...")
         try:
             people = search_people(api_key, domain, titles, per_page=max_people)
@@ -217,22 +271,47 @@ st.caption("Find target contacts by company domain, rank title fit, enrich, and 
 with st.sidebar:
     st.header("Settings")
     st.session_state["apollo_api_key"] = st.text_input("Apollo API Key", type="password", value=st.session_state.get("apollo_api_key", ""))
+    st.session_state["anthropic_api_key"] = st.text_input("Anthropic API Key (optional, for company list generator)", type="password", value=st.session_state.get("anthropic_api_key", ""))
     max_people = st.slider("Max people per company", 1, 25, 8)
     enrich = st.checkbox("Run Apollo enrichment", value=True)
     reveal_emails = st.checkbox("Reveal emails / run waterfall email", value=True, help="May consume Apollo credits depending on your plan.")
 
-st.subheader("1. Upload company CSV")
-st.write("Your CSV should include at least company name and domain columns.")
-uploaded = st.file_uploader("Upload CSV", type=["csv"])
+st.subheader("1. Get a company list")
+st.write("Describe the companies you want, or upload your own CSV below.")
+
+gen_prompt = st.text_input(
+    "e.g. \"Top 50 asset management firms in the US\"",
+    key="company_prompt",
+)
+if st.button("Generate company list"):
+    anthropic_key = get_anthropic_api_key()
+    if not anthropic_key:
+        st.error("Add your Anthropic API key in the sidebar to use the generator.")
+    elif not gen_prompt.strip():
+        st.error("Describe what companies you want first.")
+    else:
+        with st.spinner("Asking Claude for a company list..."):
+            try:
+                st.session_state["generated_companies"] = generate_companies_with_llm(anthropic_key, gen_prompt)
+            except Exception as e:
+                st.error(f"Couldn't generate a company list: {e}")
+
+st.caption("LLM-generated lists can include mistakes or outdated domains — review before running a search.")
+
+uploaded = st.file_uploader("Or upload your own CSV", type=["csv"])
 
 if uploaded:
     input_df = pd.read_csv(uploaded)
+    st.session_state.pop("generated_companies", None)
+elif "generated_companies" in st.session_state:
+    input_df = st.session_state["generated_companies"]
+    st.info("Using the generated company list below. Upload a CSV to override it.")
 else:
     input_df = pd.DataFrame({
         "Company": ["BlackRock", "Vanguard", "Fidelity Investments"],
         "Domain": ["blackrock.com", "vanguard.com", "fidelity.com"],
     })
-    st.info("Using sample data until you upload a CSV.")
+    st.info("Using sample data until you generate a list or upload a CSV.")
 
 st.dataframe(input_df, use_container_width=True)
 
