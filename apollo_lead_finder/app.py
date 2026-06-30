@@ -3,13 +3,13 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+import anthropic
 import pandas as pd
 import requests
 import streamlit as st
 
 APOLLO_SEARCH_URL = "https://api.apollo.io/api/v1/mixed_people/api_search"
 APOLLO_ENRICH_URL = "https://api.apollo.io/api/v1/people/match"
-ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
 DEFAULT_TITLES = [
@@ -45,23 +45,13 @@ def generate_companies_with_llm(api_key: str, instruction: str) -> pd.DataFrame:
         "Use each company's real primary corporate domain (e.g. blackrock.com). "
         "If you are not confident a company or its domain is real, omit it rather than guessing."
     )
-    resp = requests.post(
-        ANTHROPIC_MESSAGES_URL,
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": ANTHROPIC_MODEL,
-            "max_tokens": 4096,
-            "messages": [{"role": "user", "content": prompt}],
-        },
-        timeout=60,
+    client = anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}],
     )
-    resp.raise_for_status()
-    data = resp.json()
-    text = "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
+    text = "".join(block.text for block in message.content if hasattr(block, "text"))
     text = text.strip().strip("`")
     if text.lower().startswith("csv"):
         text = text[3:].strip()
@@ -162,9 +152,6 @@ def enrich_person(api_key: str, person: Dict[str, Any], domain: str, reveal_emai
             "(check 'Show raw Apollo response' below to see what Apollo actually returned)"
         )
 
-    # Search results mask last names (e.g. "Sh***a") and omit emails for
-    # privacy. Apollo's own person "id" from the search result lets us
-    # unlock the full record directly instead of re-matching on a masked name.
     payload = {
         "id": person_id,
         "first_name": first_name,
@@ -176,8 +163,6 @@ def enrich_person(api_key: str, person: Dict[str, Any], domain: str, reveal_emai
     }
     if reveal_emails:
         payload["reveal_personal_emails"] = True
-        # run_waterfall_email requires a webhook_url for its async callback,
-        # which doesn't apply to this local script, so we skip it.
 
     payload = {k: v for k, v in payload.items() if v}
     resp = requests.post(APOLLO_ENRICH_URL, headers=apollo_headers(api_key), json=payload, timeout=30)
