@@ -284,6 +284,7 @@
       vf.analysis.rows = rows;
       renderMappingControls(card.querySelector('.vendor-mapping'), rows, hasHeader, guess, function () {
         vf.config = buildConfig();
+        updateVendorConfirm();
       });
       renderPreviewTable(card.querySelector('.vendor-preview'), rows, hasHeader, 5);
       vf.config = buildConfig();
@@ -322,9 +323,15 @@
       if (vf.config && hasAnyColumn(vf.config.columns)) usable++;
     }
     $('vendor-confirm').disabled = usable === 0;
-    if (state.vendorFiles.length > 0 && usable < state.vendorFiles.length) {
-      $('vendor-summary').textContent = usable + ' of ' + state.vendorFiles.length +
-        ' file(s) ready — files without a mapped identifier column will be skipped.';
+    if (state.vendorFiles.length > 0) {
+      if (usable === 0) {
+        $('vendor-summary').textContent = 'No file has an identifier column mapped yet — map at least one ISIN/SEDOL/CUSIP/Ticker column above.';
+      } else if (usable < state.vendorFiles.length) {
+        $('vendor-summary').textContent = usable + ' of ' + state.vendorFiles.length +
+          ' file(s) ready — files without a mapped identifier column will be skipped.';
+      } else {
+        $('vendor-summary').textContent = usable + ' file(s) ready.';
+      }
     }
   }
 
