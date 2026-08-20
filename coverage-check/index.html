@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vendor Coverage Check</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Vendor Coverage Check</h1>
+    <p class="subtitle">Check your holdings against vendor Security Reference Master files — everything runs locally in your browser, nothing is uploaded.</p>
+  </header>
+
+  <div id="fallback-banner" class="banner warn hidden">
+    Running without a background worker — the page may feel sluggish during the scan.
+    For best performance serve this folder over HTTP (e.g. <code>python3 -m http.server</code>) or use the hosted page.
+  </div>
+
+  <nav id="stepper">
+    <span class="step current" data-step="1">1. Holdings</span>
+    <span class="step" data-step="2">2. Vendor files</span>
+    <span class="step" data-step="3">3. Scan</span>
+    <span class="step" data-step="4">4. Results</span>
+  </nav>
+
+  <!-- Step 1: Holdings -->
+  <section id="step-1">
+    <h2>Step 1 — Load your holdings file</h2>
+    <p>Pick your holdings workbook (<code>.xlsx</code>). The tool will find the identifier columns and let you confirm them.</p>
+    <input type="file" id="holdings-input" accept=".xlsx,.xls,.xlsm">
+    <div id="holdings-sheet-picker" class="hidden">
+      <label>Worksheet: <select id="holdings-sheet"></select></label>
+    </div>
+    <div id="holdings-config" class="hidden">
+      <label class="checkbox"><input type="checkbox" id="holdings-has-header" checked> First row is a header</label>
+      <div class="mapping" id="holdings-mapping"></div>
+      <h3>Preview</h3>
+      <div class="table-scroll"><table id="holdings-preview"></table></div>
+      <div class="actions">
+        <button id="holdings-confirm" class="primary">Confirm holdings mapping</button>
+        <span id="holdings-summary" class="note"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 2: Vendor files -->
+  <section id="step-2" class="hidden">
+    <h2>Step 2 — Pick the vendor TXT files</h2>
+    <p>Select all the vendor Security Reference Master files at once (they can be many GB — they are streamed, never loaded into memory). Review the detected layout of each file below.</p>
+    <input type="file" id="vendor-input" multiple>
+    <div id="vendor-cards"></div>
+    <div class="actions">
+      <button id="vendor-confirm" class="primary" disabled>Start coverage scan</button>
+      <span id="vendor-summary" class="note"></span>
+    </div>
+  </section>
+
+  <!-- Step 3: Scan -->
+  <section id="step-3" class="hidden">
+    <h2>Step 3 — Scanning</h2>
+    <div class="progress-overall">
+      <div class="progress-labels"><span id="overall-label">Overall</span><span id="overall-stats"></span></div>
+      <div class="progress-track"><div class="progress-fill" id="overall-fill"></div></div>
+    </div>
+    <div id="file-progress"></div>
+    <div class="actions">
+      <button id="scan-cancel" class="danger">Cancel</button>
+    </div>
+  </section>
+
+  <!-- Step 4: Results -->
+  <section id="step-4" class="hidden">
+    <h2>Step 4 — Coverage results</h2>
+    <div id="summary-cards" class="cards"></div>
+    <div class="breakdowns">
+      <div>
+        <h3>Matches by identifier type</h3>
+        <div class="table-scroll"><table id="by-type"></table></div>
+      </div>
+      <div>
+        <h3>Holdings found per vendor file</h3>
+        <div class="table-scroll"><table id="by-file"></table></div>
+      </div>
+    </div>
+    <div class="ticker-note note hidden" id="ticker-note">
+      Some holdings matched on ticker only — ticker matches are lower confidence than ISIN/SEDOL/CUSIP matches.
+    </div>
+    <h3>Per-holding detail</h3>
+    <div class="actions">
+      <label>Show:
+        <select id="detail-filter">
+          <option value="all">All holdings</option>
+          <option value="matched">Matched only</option>
+          <option value="unmatched">Unmatched only</option>
+        </select>
+      </label>
+      <button id="download-full">Download full CSV</button>
+      <button id="download-unmatched">Download unmatched CSV</button>
+      <button id="restart" class="secondary">Start over</button>
+    </div>
+    <div class="table-scroll tall"><table id="detail-table"></table></div>
+  </section>
+
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="js/normalize.js"></script>
+  <script src="js/detect.js"></script>
+  <script src="js/scan-core.js"></script>
+  <script src="js/holdings.js"></script>
+  <script src="js/results.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

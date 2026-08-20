@@ -1,12 +1,14 @@
-name: Deploy SRM Crosswalk to GitHub Pages
+name: Deploy Pages site (SRM Crosswalk + Coverage Check)
 
 on:
   push:
     branches:
       - claude/security-reference-master-0wigys
       - claude/amazing-einstein-o9ttll
+      - claude/holdings-vendor-coverage-check-00hj8d
     paths:
       - 'srm-tool/**'
+      - 'coverage-check/**'
       - '.github/workflows/deploy-srm-tool.yml'
   workflow_dispatch:
 
@@ -37,6 +39,8 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Add coverage-check tool
+        run: cp -r coverage-check srm-tool/dist/coverage-check
       - uses: actions/configure-pages@v5
         with:
           enablement: true
