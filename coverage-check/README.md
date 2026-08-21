@@ -14,9 +14,13 @@ loaded into memory.
 1. Open the tool (hosted page, or serve this folder locally — see below).
 2. **Step 1**: pick your holdings `.xlsx`. The tool guesses which columns hold
    ISIN / SEDOL / CUSIP / ticker; confirm or correct them.
-3. **Step 2**: select all the vendor TXT files at once. For each file the tool
-   samples the first 256 KB, detects the delimiter and header, and guesses the
-   identifier columns — review each file's card and correct anything wrong.
+3. **Step 2**: select all the vendor TXT files at once. By default every file
+   is scanned in **"search all columns"** mode — every column of every row is
+   checked against your holdings' identifiers, so you don't need to know which
+   file keeps its ISINs where. For precision you can untick the checkbox on a
+   file's card and map specific columns instead (the tool pre-fills its best
+   guess). The tool samples the first 256 KB of each file to detect the
+   delimiter and header row — review those if a preview looks wrong.
 4. **Step 3**: the scan streams each file once, with per-file progress. A ~5 GB
    corpus typically takes well under two minutes on a modern machine.
 5. **Step 4**: coverage summary (overall %, per identifier type, per vendor
@@ -41,10 +45,19 @@ scanning the large files.
 ## How matching works
 
 - Holdings identifiers are normalized (trimmed, uppercased) and held in memory
-  (they're small). Each vendor file is then streamed **once**, line by line,
-  and every row's identifier columns are checked against the holdings.
+  (they're small). Each vendor file is then streamed **once**, line by line.
+  In "search all columns" mode every field of every row is probed (cheap
+  length/pattern gates first: 12 chars + ISIN shape → ISIN, 7 chars → SEDOL,
+  9 chars → CUSIP, ≤12 chars → ticker); in manual mode only the mapped
+  columns are checked. Matching is always **exact** on the normalized value —
+  "all columns" widens *where* the tool looks, not *what counts as a match*.
 - A holding is **covered** if any of its identifiers appears in any vendor
-  file. Match precedence when reporting: ISIN > SEDOL > CUSIP > Ticker.
+  file. Match precedence when reporting: ISIN > SEDOL > CUSIP > Ticker. The
+  per-file results table shows *which column* produced the hits, so a
+  spurious source (e.g. a ticker hit in a currency column) is visible — flip
+  that file to manual mapping to exclude it.
+- "Search all columns" is roughly 2–3× slower than mapped columns since every
+  field is inspected — still minutes, not hours, for a ~5 GB corpus.
 - Ticker matching is best-effort: common exchange qualifiers are stripped
   (`AAPL US` ≡ `AAPL`, `VOD.L` ≡ `VOD`) but share classes are preserved
   (`BRK.B` stays `BRK.B`). Holdings that matched on ticker *only* are flagged

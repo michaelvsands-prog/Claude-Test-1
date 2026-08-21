@@ -31,9 +31,11 @@
   /**
    * Ticker normalization. Returns {exact, root}. `root` strips one trailing
    * exchange qualifier: a whitespace-separated suffix ("AAPL US" -> "AAPL",
-   * "VOD LN EQUITY" -> "VOD") or a whitelisted dot/colon suffix ("VOD.L" ->
-   * "VOD", "AAPL:US" -> "AAPL"). Unknown dot suffixes are kept (BRK.B stays
-   * BRK.B). root === exact when nothing was stripped.
+   * "VOD LN EQUITY" -> "VOD"), a colon suffix ("AAPL:US" -> "AAPL"), or a
+   * whitelisted dot/hyphen suffix ("VOD.L" -> "VOD", "TSLA-US" -> "TSLA",
+   * FactSet-style "BRK.B-US" -> "BRK.B"). Unknown dot/hyphen suffixes are
+   * kept (BRK.B and BRK-B stay intact). root === exact when nothing was
+   * stripped.
    */
   function normTicker(v) {
     var exact = normId(v);
@@ -48,7 +50,7 @@
       var sep = -1, i;
       for (i = root.length - 1; i > 0; i--) {
         var c = root.charAt(i);
-        if (c === '.' || c === ':') { sep = i; break; }
+        if (c === '.' || c === ':' || c === '-') { sep = i; break; }
       }
       if (sep > 0) {
         var suffix = root.slice(sep + 1);

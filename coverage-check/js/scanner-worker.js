@@ -2,11 +2,11 @@
  * scanner-worker.js — Web Worker entry point.
  * Protocol (main -> worker):
  *   {type:'init', holdings:{isin:[], sedol:[], cusip:[], tickerExact:[], tickerRoot:[]}}
- *   {type:'scan', fileIndex, file:File, config:{delimiter, hasHeader, quoted, columns}}
+ *   {type:'scan', fileIndex, file:File, config:{delimiter, hasHeader, quoted, columns, autoColumns}}
  *   {type:'cancel'}
  * Protocol (worker -> main):
  *   {type:'progress', fileIndex, bytesProcessed, totalBytes, rows, matchCount}
- *   {type:'matches',  fileIndex, matches:[{idType, value}]}
+ *   {type:'matches',  fileIndex, matches:[{idType, value, col}]}
  *   {type:'done',     fileIndex, stats:{rows, bytes, badLines, matchCount, cancelled, elapsedMs}}
  *   {type:'error',    fileIndex, message}
  */

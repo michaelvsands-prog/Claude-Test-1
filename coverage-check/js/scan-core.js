@@ -17,10 +17,12 @@
    * holdings lookup sets.
    *
    * config: {delimiter, hasHeader, quoted, columns:{isin,sedol,cusip,ticker}}
+   *   or, with autoColumns:true, every field of every row is probed and
+   *   `columns` is ignored.
    * lookup: {isin:Set, sedol:Set, cusip:Set, tickerExact:Set, tickerRoot:Set}
    * callbacks: {
    *   onProgress(bytesProcessed, rows, matchCount),
-   *   onMatches([{idType, value}]),        // deduped per file, batched
+   *   onMatches([{idType, value, col}]),   // deduped per file, batched
    *   shouldCancel() -> boolean,
    *   yieldToUI() -> Promise | null        // main-thread fallback only
    * }
@@ -29,14 +31,17 @@
   function scanFile(file, config, lookup, callbacks) {
     var split = config.quoted ? D.splitLineQuoted : D.splitLine;
     var delimiter = config.delimiter;
-    var cols = config.columns;
+    var auto = !!config.autoColumns;
+    var cols = config.columns || {};
 
-    // Precompute the column probes: [colIndex, idType]
+    // Precompute the column probes: [colIndex, idType] (manual mode only)
     var probes = [];
-    if (cols.isin != null) probes.push([cols.isin, 'isin']);
-    if (cols.sedol != null) probes.push([cols.sedol, 'sedol']);
-    if (cols.cusip != null) probes.push([cols.cusip, 'cusip']);
-    if (cols.ticker != null) probes.push([cols.ticker, 'ticker']);
+    if (!auto) {
+      if (cols.isin != null) probes.push([cols.isin, 'isin']);
+      if (cols.sedol != null) probes.push([cols.sedol, 'sedol']);
+      if (cols.cusip != null) probes.push([cols.cusip, 'cusip']);
+      if (cols.ticker != null) probes.push([cols.ticker, 'ticker']);
+    }
     var maxCol = 0;
     for (var p = 0; p < probes.length; p++) maxCol = Math.max(maxCol, probes[p][0]);
 
@@ -55,28 +60,54 @@
       }
       stats.rows++;
       var fields = split(line, delimiter);
+      if (auto) {
+        for (var f = 0; f < fields.length; f++) {
+          var rawField = fields[f];
+          // Identifiers are <=12 chars; skip long text fields (names etc.)
+          // before paying for normalization. 24 allows quotes/padding.
+          if (rawField.length === 0 || rawField.length > 24) continue;
+          var av = N.normId(rawField);
+          if (!av) continue;
+          var len = av.length;
+          if (len === 12 && N.looksLikeIsin(av) && lookup.isin.has(av)) recordMatch('isin', av, f);
+          if (len === 7 && lookup.sedol.has(av)) recordMatch('sedol', av, f);
+          if (len === 9 && lookup.cusip.has(av)) recordMatch('cusip', av, f);
+          // Length gate keeps long text fields (security names) out of the
+          // ticker path so name words can't collide with ticker roots.
+          if (len <= 12) {
+            if (lookup.tickerExact.has(av)) {
+              recordMatch('ticker', av, f);
+            } else {
+              var at = N.normTicker(av);
+              if (at.root !== at.exact && lookup.tickerRoot.has(at.root)) recordMatch('ticker', at.root, f);
+            }
+          }
+        }
+        return;
+      }
       if (fields.length <= maxCol) { stats.badLines++; return; }
       for (var i = 0; i < probes.length; i++) {
         var idType = probes[i][1];
-        var raw = fields[probes[i][0]];
+        var col = probes[i][0];
+        var raw = fields[col];
         if (idType === 'ticker') {
           var t = N.normTicker(raw);
           if (!t.exact) continue;
-          if (lookup.tickerExact.has(t.exact)) recordMatch('ticker', t.exact);
-          else if (lookup.tickerRoot.has(t.root)) recordMatch('ticker', t.root);
+          if (lookup.tickerExact.has(t.exact)) recordMatch('ticker', t.exact, col);
+          else if (lookup.tickerRoot.has(t.root)) recordMatch('ticker', t.root, col);
         } else {
           var v = N.normId(raw);
-          if (v && lookup[idType].has(v)) recordMatch(idType, v);
+          if (v && lookup[idType].has(v)) recordMatch(idType, v, col);
         }
       }
     }
 
-    function recordMatch(idType, value) {
+    function recordMatch(idType, value, col) {
       var key = idType + '|' + value;
       if (reported[key]) return;
       reported[key] = 1;
       stats.matchCount++;
-      matchBuffer.push({ idType: idType, value: value });
+      matchBuffer.push({ idType: idType, value: value, col: col });
       if (matchBuffer.length >= MATCH_BATCH_SIZE) flushMatches();
     }
 

@@ -269,7 +269,9 @@
       '<label class="checkbox" style="flex-direction:row;align-items:center;">' +
       '<input type="checkbox" class="vendor-header"' + (a.hasHeader ? ' checked' : '') + '> First row is a header</label>' +
       '</div>' +
-      '<div class="mapping vendor-mapping"></div>' +
+      '<label class="checkbox" style="flex-direction:row;align-items:center;">' +
+      '<input type="checkbox" class="vendor-auto" checked> Search all columns automatically (recommended)</label>' +
+      '<div class="mapping vendor-mapping hidden"></div>' +
       '<div class="table-scroll"><table class="vendor-preview"></table></div>' +
       '</div>';
     container.appendChild(card);
@@ -291,13 +293,17 @@
     };
 
     var buildConfig = function () {
-      var mapping = readMapping(card.querySelector('.vendor-mapping'));
-      return {
+      var hasHeader = card.querySelector('.vendor-header').checked;
+      var rows = vf.analysis.rows;
+      var config = {
         delimiter: card.querySelector('.vendor-delim').value,
-        hasHeader: card.querySelector('.vendor-header').checked,
+        hasHeader: hasHeader,
         quoted: a.quoted,
-        columns: mapping
+        autoColumns: card.querySelector('.vendor-auto').checked,
+        columns: readMapping(card.querySelector('.vendor-mapping')),
+        headerNames: hasHeader && rows && rows.length > 0 ? rows[0].map(String) : null
       };
+      return config;
     };
 
     // Keep the raw sample lines so delimiter changes can re-split.
@@ -314,25 +320,35 @@
 
     card.querySelector('.vendor-delim').addEventListener('change', function () { reanalyze(); updateVendorConfirm(); });
     card.querySelector('.vendor-header').addEventListener('change', function () { reanalyze(); updateVendorConfirm(); });
+    card.querySelector('.vendor-auto').addEventListener('change', function () {
+      var autoOn = card.querySelector('.vendor-auto').checked;
+      card.querySelector('.vendor-mapping').classList.toggle('hidden', autoOn);
+      vf.config = buildConfig();
+      updateVendorConfirm();
+    });
   }
 
   function updateVendorConfirm() {
     var usable = 0;
     for (var i = 0; i < state.vendorFiles.length; i++) {
       var vf = state.vendorFiles[i];
-      if (vf.config && hasAnyColumn(vf.config.columns)) usable++;
+      if (fileUsable(vf)) usable++;
     }
     $('vendor-confirm').disabled = usable === 0;
     if (state.vendorFiles.length > 0) {
       if (usable === 0) {
-        $('vendor-summary').textContent = 'No file has an identifier column mapped yet — map at least one ISIN/SEDOL/CUSIP/Ticker column above.';
+        $('vendor-summary').textContent = 'No file is ready — enable "Search all columns" or map at least one ISIN/SEDOL/CUSIP/Ticker column above.';
       } else if (usable < state.vendorFiles.length) {
         $('vendor-summary').textContent = usable + ' of ' + state.vendorFiles.length +
-          ' file(s) ready — files without a mapped identifier column will be skipped.';
+          ' file(s) ready — files that are not ready will be skipped.';
       } else {
         $('vendor-summary').textContent = usable + ' file(s) ready.';
       }
     }
+  }
+
+  function fileUsable(vf) {
+    return !!(vf.config && (vf.config.autoColumns || hasAnyColumn(vf.config.columns)));
   }
 
   function hasAnyColumn(cols) {
@@ -350,12 +366,11 @@
       var idx = parseInt(cards[i].getAttribute('data-idx'), 10);
       var vf = state.vendorFiles[idx];
       var mappingEl = cards[i].querySelector('.vendor-mapping');
-      if (vf.config && mappingEl) vf.config.columns = readMapping(mappingEl);
+      if (vf.config && !vf.config.autoColumns && mappingEl) vf.config.columns = readMapping(mappingEl);
     }
     state.scanQueue = [];
     for (var j = 0; j < state.vendorFiles.length; j++) {
-      var v = state.vendorFiles[j];
-      if (v.config && hasAnyColumn(v.config.columns)) state.scanQueue.push(j);
+      if (fileUsable(state.vendorFiles[j])) state.scanQueue.push(j);
     }
     if (state.scanQueue.length === 0) {
       alert('No vendor file has an identifier column mapped.');
@@ -457,7 +472,7 @@
     if (msg.type === 'progress') {
       updateFileProgress(queuePos, msg.bytesProcessed, msg.totalBytes, false);
     } else if (msg.type === 'matches') {
-      R.applyMatches(state.agg, msg.matches, fileName, state.lookup.valueToRows);
+      R.applyMatches(state.agg, msg.matches, fileName, state.lookup.valueToRows, state.vendorFiles[idx].config.headerNames);
     } else if (msg.type === 'done') {
       state.bytesDone += state.vendorFiles[idx].file.size;
       state.fileStats[queuePos] = msg.stats;
@@ -488,7 +503,7 @@
     };
     window.CoverageScan.scanFile(vf.file, vf.config, lookup, {
       onProgress: function (bytes) { updateFileProgress(queuePos, bytes, vf.file.size, false); },
-      onMatches: function (matches) { R.applyMatches(state.agg, matches, fileName, state.lookup.valueToRows); },
+      onMatches: function (matches) { R.applyMatches(state.agg, matches, fileName, state.lookup.valueToRows, vf.config.headerNames); },
       shouldCancel: function () { return state.cancelled; },
       yieldToUI: function () { return new Promise(function (res) { setTimeout(res, 0); }); }
     }).then(function (stats) {
@@ -549,10 +564,12 @@
     });
     $('by-type').innerHTML = t + '</tbody>';
 
-    var f = '<thead><tr><th>Vendor file</th><th>Holdings found</th><th>Rows scanned</th></tr></thead><tbody>';
+    var f = '<thead><tr><th>Vendor file</th><th>Holdings found</th><th>Matched via</th><th>Rows scanned</th></tr></thead><tbody>';
     for (var i = 0; i < fileNames.length; i++) {
       var st = state.fileStats[i] || {};
+      var via = R.fileColumnSummary(state.agg, fileNames[i]);
       f += '<tr><td>' + escapeHtml(fileNames[i]) + '</td><td>' + (summary.byFile[fileNames[i]] || 0) + '</td><td>' +
+        (via ? escapeHtml(via) : '—') + '</td><td>' +
         (st.error ? '<span class="warn-text">failed: ' + escapeHtml(st.error) + '</span>' : (st.rows != null ? st.rows.toLocaleString() : '—')) + '</td></tr>';
     }
     $('by-file').innerHTML = f + '</tbody>';

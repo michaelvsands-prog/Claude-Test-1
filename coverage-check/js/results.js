@@ -17,19 +17,30 @@
     for (var i = 0; i < holdingCount; i++) {
       perHolding[i] = { matched: false, types: {}, files: {} }; // files: fileName -> {idType:1}
     }
-    return { perHolding: perHolding, holdingCount: holdingCount };
+    // fileColumns: fileName -> idType -> {columnLabel: 1} — audit trail of
+    // which vendor columns produced hits (bounded: files × 4 types × columns).
+    return { perHolding: perHolding, holdingCount: holdingCount, fileColumns: {} };
   }
 
   /**
    * Apply a batch of worker matches.
-   * matches: [{idType, value}]; fileName: vendor file name;
-   * valueToRows: Map<'idType|value', rowIdx[]>.
+   * matches: [{idType, value, col}]; fileName: vendor file name;
+   * valueToRows: Map<'idType|value', rowIdx[]>;
+   * headerNames: vendor file header cells (or null) to label matched columns.
    */
-  function applyMatches(agg, matches, fileName, valueToRows) {
+  function applyMatches(agg, matches, fileName, valueToRows, headerNames) {
     for (var m = 0; m < matches.length; m++) {
       var idType = matches[m].idType;
       var rows = valueToRows.get(idType + '|' + matches[m].value);
       if (!rows) continue;
+      var col = matches[m].col;
+      if (col != null) {
+        var label = headerNames && headerNames[col] != null && String(headerNames[col]).trim() !== ''
+          ? String(headerNames[col]) : 'Column ' + (col + 1);
+        if (!agg.fileColumns[fileName]) agg.fileColumns[fileName] = {};
+        if (!agg.fileColumns[fileName][idType]) agg.fileColumns[fileName][idType] = {};
+        agg.fileColumns[fileName][idType][label] = 1;
+      }
       for (var r = 0; r < rows.length; r++) {
         var h = agg.perHolding[rows[r]];
         h.matched = true;
@@ -38,6 +49,18 @@
         h.files[fileName][idType] = 1;
       }
     }
+  }
+
+  /** "ISIN (column ISIN); Ticker (column SYMBOL)" audit string for one file. */
+  function fileColumnSummary(agg, fileName) {
+    var fc = agg.fileColumns[fileName];
+    if (!fc) return '';
+    var parts = [];
+    for (var i = 0; i < ID_PRECEDENCE.length; i++) {
+      var t = ID_PRECEDENCE[i];
+      if (fc[t]) parts.push(ID_LABELS[t] + ' (column ' + Object.keys(fc[t]).sort().join(', ') + ')');
+    }
+    return parts.join('; ');
   }
 
   function bestType(types) {
@@ -170,6 +193,7 @@
   global.CoverageResults = {
     createAggregator: createAggregator,
     applyMatches: applyMatches,
+    fileColumnSummary: fileColumnSummary,
     summarize: summarize,
     buildDetail: buildDetail,
     toCsv: toCsv,
